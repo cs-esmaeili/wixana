@@ -11,5 +11,9 @@ exports.removeCommas = (numberString) => {
 };
 
 exports.normalizeHeroName = (name) => {
+    if (typeof name !== 'string') {
+        return ''; // Or handle the undefined case as needed, e.g., return null or throw an error
+    }
+    
     return name.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
+};

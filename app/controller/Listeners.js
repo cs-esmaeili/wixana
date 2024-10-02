@@ -11,11 +11,13 @@ const {
     clearSheetCell,
     updateSheetValue
 } = require('@root/app/utils/sheet.js');
-const { addCommas } = require('@root/app/utils/general');
+const { addCommas, removeCommas, normalizeHeroName } = require('@root/app/utils/general');
+const { findCol, findCell } = require('@root/app/utils/basics');
+
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const moment = require('moment'); 
+const moment = require('moment');
 
 
 exports.botInitListeners = async () => {
@@ -70,7 +72,15 @@ exports.botInitListeners = async () => {
 };
 
 const createLottery = async (interaction) => {
-    // Fetch user inputs
+
+    // Check if the interaction is happening in a guild (server)
+    if (!interaction.guild) {
+        await interaction.reply({ content: 'This command can only be used in a server, not in DMs.', ephemeral: true });
+        return;
+    }
+
+    await interaction.deferReply({ ephemeral: false });
+
     const days = interaction.options.getInteger('days');
     const hours = interaction.options.getInteger('hours');
     const minutes = interaction.options.getInteger('minutes');
@@ -82,7 +92,7 @@ const createLottery = async (interaction) => {
     const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
 
     if (endTime <= now) {
-        await interaction.reply({ content: 'The end time must be in the future.', ephemeral: true });
+        await interaction.editReply({ content: 'The end time must be in the future.', ephemeral: true });
         return;
     }
 
@@ -104,14 +114,13 @@ const createLottery = async (interaction) => {
 
     const actionRow = new ActionRowBuilder().addComponents(button);
 
-    // Send lottery message
-    const message = await interaction.channel.send({
+    const message = await interaction.editReply({
         embeds: [embed],
         components: [actionRow],
+        ephemeral: false,
     });
 
-    // Reply to the command
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+
 
     // Create a collector for button interactions
     const collector = message.createMessageComponentCollector({
@@ -122,13 +131,14 @@ const createLottery = async (interaction) => {
     const participants = new Map(); // Map to keep track of user tickets
 
     collector.on('collect', async (buttonInteraction) => {
+        await buttonInteraction.deferReply({ ephemeral: true });  // Defer reply for the button interaction
+
         const user = buttonInteraction.user;
         const currentCount = participants.get(user.id) || 0;
 
         if (currentCount < allowNumberTickets) {
             participants.set(user.id, currentCount + 1); // Increment ticket count
             try {
-
                 const userHeros = await findHeroNames(user.id);
                 const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
                 const { index: deductsIndex, value: deductsValue } = await findCol("Pending Balance", "Deducts", indexRow[1]);
@@ -139,21 +149,20 @@ const createLottery = async (interaction) => {
                 let newNotesValue = notesValue + (notesValue.length != 0 ? "\n" : "") + `Balance decrease : ${ticketPrice} for Lottery`;
                 await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
 
-
-                // await buttonInteraction.reply({ content: ${user.username}, you have successfully bought a ticket! You now have ${currentCount + 1} tickets., ephemeral: true });
+                await buttonInteraction.editReply({ content: `${user.username}, you have successfully bought a ticket! You now have ${currentCount + 1} tickets.` });
             } catch (error) {
                 console.error('Failed to update balance:', error);
-                await buttonInteraction.followUp({ content: 'Failed to update your balance. Please try again.', ephemeral: true });
+                await buttonInteraction.editReply({ content: 'Failed to Buy Ticket. Please try again.' });
             }
         } else {
-            await buttonInteraction.reply({ content: 'You have reached the maximum number of tickets you can buy.', ephemeral: true });
+            await buttonInteraction.editReply({ content: 'You have reached the maximum number of tickets you can buy.' });
         }
     });
 
     // When the lottery ends
     collector.on('end', async () => {
         if (participants.size === 0) {
-            await message.reply('No one entered the lottery.');
+            await interaction.followUp('No one entered the lottery.'); // Use interaction.followUp instead of message.followUp
             return;
         }
 
@@ -161,15 +170,20 @@ const createLottery = async (interaction) => {
         const winnerId = [...participants.keys()][Math.floor(Math.random() * participants.size)];
         const winner = await interaction.guild.members.fetch(winnerId);
 
-        const userHeros = await findHeroNames(winner);
+        const userHeros = await findHeroNames(winnerId);
         const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
         const { index, value } = await findCol("Pending Balance", "Bonus", indexRow[1]);
-        let newValue = (value == "" ? parseInt(ticketPrice) : parseInt(removeCommas(value)) + parseInt(ticketPrice));
+        let newValue = (value === "" ? parseInt(ticketPrice) : parseInt(removeCommas(value)) + parseInt(ticketPrice));
         await updateSheetValue("Pending Balance", index, newValue);
 
+        const { index: notesIndex, value: notesValue } = await findCol("Pending Balance", "Notes", indexRow[1]);
+        let newNotesValue = notesValue + (notesValue.length != 0 ? "\n" : "") + `Balance increase : ${ticketPrice} for win in Lottery !`;
+        await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
+
         // Announce the winner
-        await message.reply(`🎉 The lottery has ended! Congratulations ${winner}, you won the lottery for **${description}**!`);
+        await interaction.followUp(`🎉 The lottery has ended! Congratulations ${winner}, you won the lottery for **${description}**!`); // Use interaction.followUp
     });
+
 };
 
 
