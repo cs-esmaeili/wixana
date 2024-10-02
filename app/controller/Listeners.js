@@ -73,222 +73,243 @@ exports.botInitListeners = async () => {
 };
 
 const createLottery = async (interaction) => {
-
-    // Check if the interaction is happening in a guild (server)
-    if (!interaction.guild) {
-        await interaction.reply({ content: 'This command can only be used in a server, not in DMs.', ephemeral: true });
-        return;
-    }
-
-    await interaction.deferReply({ ephemeral: false });
-
-    const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID)) {
-        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
-        return;
-    }
-
-    const days = interaction.options.getInteger('days');
-    const hours = interaction.options.getInteger('hours');
-    const minutes = interaction.options.getInteger('minutes');
-    const ticketPrice = interaction.options.getNumber('ticketprice');
-    const description = interaction.options.getString('description');
-    const allowNumberTickets = interaction.options.getInteger('allownumbertickets');
-
-    const now = new Date();
-    const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
-
-    if (endTime <= now) {
-        await interaction.editReply({ content: 'The end time must be in the future.', ephemeral: true });
-        return;
-    }
-
-    // Convert end time to Tehran timezone
-    const readableEndTime = endTime.toLocaleString('en-GB', { timeZone: 'Asia/Tehran' });
-
-    // Creating the lottery embed
-    const embed = new EmbedBuilder()
-        .setTitle(`🎉 Lottery: ${description}`)
-        .setDescription(`**Ticket Price:** ${ticketPrice}\nEnds at: **${readableEndTime}** (Tehran Time)\nYou can buy up to **${allowNumberTickets}** tickets!`)
-        .setColor(0x00FF00)
-        .setTimestamp(endTime);
-
-    // Button for buying tickets
-    const button = new ButtonBuilder()
-        .setCustomId('lottery-entry')
-        .setLabel('Buy a Ticket')
-        .setStyle(ButtonStyle.Primary);
-
-    const actionRow = new ActionRowBuilder().addComponents(button);
-
-    const message = await interaction.editReply({
-        embeds: [embed],
-        components: [actionRow],
-        ephemeral: false,
-    });
-
-
-
-    // Create a collector for button interactions
-    const collector = message.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: endTime - now,
-    });
-
-    const participants = new Map(); // Map to keep track of user tickets
-
-    collector.on('collect', async (buttonInteraction) => {
-        await buttonInteraction.deferReply({ ephemeral: true });  // Defer reply for the button interaction
-
-        const user = buttonInteraction.user;
-        const currentCount = participants.get(user.id) || 0;
-
-        if (currentCount < allowNumberTickets) {
-            participants.set(user.id, currentCount + 1); // Increment ticket count
-            try {
-                const userHeros = await findHeroNames(user.id);
-                const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
-                const { index: deductsIndex, value: deductsValue } = await findCol("Pending Balance", "Deducts", indexRow[1]);
-                let newDeductsValue = (deductsValue == "" ? parseInt(ticketPrice) : parseInt(removeCommas(deductsValue)) + parseInt(ticketPrice));
-                await updateSheetValue("Pending Balance", deductsIndex, newDeductsValue);
-
-                const { index: notesIndex, value: notesValue } = await findCol("Pending Balance", "Notes", indexRow[1]);
-                let newNotesValue = notesValue + (notesValue.length != 0 ? "\n" : "") + `Balance decrease : ${ticketPrice} for Lottery`;
-                await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
-
-                await buttonInteraction.editReply({ content: `${user.username}, you have successfully bought a ticket! You now have ${currentCount + 1} tickets.` });
-            } catch (error) {
-                console.error('Failed to update balance:', error);
-                await buttonInteraction.editReply({ content: 'Failed to Buy Ticket. Please try again.' });
-            }
-        } else {
-            await buttonInteraction.editReply({ content: 'You have reached the maximum number of tickets you can buy.' });
-        }
-    });
-
-    // When the lottery ends
-    collector.on('end', async () => {
-        if (participants.size === 0) {
-            await interaction.followUp('No one entered the lottery.'); // Use interaction.followUp instead of message.followUp
+    try {
+        // Check if the interaction is happening in a guild (server)
+        if (!interaction.guild) {
+            await interaction.reply({ content: 'This command can only be used in a server, not in DMs.', ephemeral: true });
             return;
         }
 
-        // Randomly select a winner
-        const winnerId = [...participants.keys()][Math.floor(Math.random() * participants.size)];
-        const winner = await interaction.guild.members.fetch(winnerId);
+        await interaction.deferReply({ ephemeral: false });
 
-        const userHeros = await findHeroNames(winnerId);
-        const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
-        const { index, value } = await findCol("Pending Balance", "Bonus", indexRow[1]);
-        let newValue = (value === "" ? parseInt(ticketPrice) : parseInt(removeCommas(value)) + parseInt(ticketPrice));
-        await updateSheetValue("Pending Balance", index, newValue);
+        const senderDiscordID = interaction.user.id;
+        if (!isAdmin(senderDiscordID)) {
+            await interaction.editReply({ content: 'You are not Admin!', ephemeral: true });
+            return;
+        }
 
-        const { index: notesIndex, value: notesValue } = await findCol("Pending Balance", "Notes", indexRow[1]);
-        let newNotesValue = notesValue + (notesValue.length != 0 ? "\n" : "") + `Balance increase : ${ticketPrice} for win in Lottery !`;
-        await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
+        const days = interaction.options.getInteger('days');
+        const hours = interaction.options.getInteger('hours');
+        const minutes = interaction.options.getInteger('minutes');
+        const ticketPrice = interaction.options.getNumber('ticketprice');
+        const description = interaction.options.getString('description');
+        const allowNumberTickets = interaction.options.getInteger('allownumbertickets');
 
-        // Announce the winner
-        await interaction.followUp(`🎉 The lottery has ended! Congratulations ${winner}, you won the lottery for **${description}**!`); // Use interaction.followUp
-    });
+        const now = new Date();
+        const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
 
+        if (endTime <= now) {
+            await interaction.editReply({ content: 'The end time must be in the future.', ephemeral: true });
+            return;
+        }
+
+        // Convert end time to Tehran timezone
+        const readableEndTime = endTime.toLocaleString('en-GB', { timeZone: 'Asia/Tehran' });
+
+        // Creating the lottery embed
+        const embed = new EmbedBuilder()
+            .setTitle(`🎉 Lottery: ${description}`)
+            .setDescription(`**Ticket Price:** ${ticketPrice}\nEnds at: **${readableEndTime}** (Tehran Time)\nYou can buy up to **${allowNumberTickets}** tickets!`)
+            .setColor(0x00FF00)
+            .setTimestamp(endTime);
+
+        // Button for buying tickets
+        const button = new ButtonBuilder()
+            .setCustomId('lottery-entry')
+            .setLabel('Buy a Ticket')
+            .setStyle(ButtonStyle.Primary);
+
+        const actionRow = new ActionRowBuilder().addComponents(button);
+
+        const message = await interaction.editReply({
+            embeds: [embed],
+            components: [actionRow],
+            ephemeral: false,
+        });
+
+        // Create a collector for button interactions
+        const collector = message.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: endTime - now,
+        });
+
+        const participants = new Map(); // Map to keep track of user tickets
+
+        collector.on('collect', async (buttonInteraction) => {
+            try {
+                await buttonInteraction.deferReply({ ephemeral: true });  // Defer reply for the button interaction
+
+                const user = buttonInteraction.user;
+                const currentCount = participants.get(user.id) || 0;
+
+                if (currentCount < allowNumberTickets) {
+                    participants.set(user.id, currentCount + 1); // Increment ticket count
+                    try {
+                        const userHeros = await findHeroNames(user.id);
+                        const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
+                        const { index: deductsIndex, value: deductsValue } = await findCol("Pending Balance", "Deducts", indexRow[1]);
+                        let newDeductsValue = (deductsValue === "" ? parseInt(ticketPrice) : parseInt(removeCommas(deductsValue)) + parseInt(ticketPrice));
+                        await updateSheetValue("Pending Balance", deductsIndex, newDeductsValue);
+
+                        const { index: notesIndex, value: notesValue } = await findCol("Pending Balance", "Notes", indexRow[1]);
+                        let newNotesValue = notesValue + (notesValue.length !== 0 ? "\n" : "") + `Balance decrease: ${ticketPrice} for Lottery`;
+                        await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
+
+                        await buttonInteraction.editReply({ content: `${user.username}, you have successfully bought a ticket! You now have ${currentCount + 1} tickets.` });
+                    } catch (error) {
+                        console.error('Failed to update balance:', error);
+                        await buttonInteraction.editReply({ content: 'Failed to Buy Ticket. Please try again.' });
+                    }
+                } else {
+                    await buttonInteraction.editReply({ content: 'You have reached the maximum number of tickets you can buy.' });
+                }
+            } catch (error) {
+                console.error('Error during ticket purchase:', error);
+                await buttonInteraction.editReply({ content: 'An error occurred during the ticket purchase. Please try again later.' });
+            }
+        });
+
+        // When the lottery ends
+        collector.on('end', async () => {
+            try {
+                if (participants.size === 0) {
+                    await interaction.followUp('No one entered the lottery.');
+                    return;
+                }
+
+                // Randomly select a winner
+                const winnerId = [...participants.keys()][Math.floor(Math.random() * participants.size)];
+                const winner = await interaction.guild.members.fetch(winnerId);
+
+                const userHeros = await findHeroNames(winnerId);
+                const { index: indexRow } = await findCell("Pending Balance", "Main Roster", userHeros);
+                const { index, value } = await findCol("Pending Balance", "Bonus", indexRow[1]);
+                let newValue = (value === "" ? parseInt(ticketPrice) : parseInt(removeCommas(value)) + parseInt(ticketPrice));
+                await updateSheetValue("Pending Balance", index, newValue);
+
+                const { index: notesIndex, value: notesValue } = await findCol("Pending Balance", "Notes", indexRow[1]);
+                let newNotesValue = notesValue + (notesValue.length !== 0 ? "\n" : "") + `Balance increase: ${ticketPrice} for winning the Lottery!`;
+                await updateSheetValue("Pending Balance", notesIndex, newNotesValue);
+
+                // Announce the winner
+                await interaction.followUp(`🎉 The lottery has ended! Congratulations ${winner}, you won the lottery for **${description}**!`);
+            } catch (error) {
+                console.error('Error while ending lottery:', error);
+                await interaction.followUp('An error occurred while ending the lottery.');
+            }
+        });
+    } catch (error) {
+        console.error('Error creating lottery:', error);
+        await interaction.editReply({ content: 'An error occurred while creating the lottery. Please try again.', ephemeral: true });
+    }
 };
 
 
 
 const createGiveaway = async (interaction) => {
-
-    const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID)) {
-        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
-        return;
-    }
-
-
-    // Fetching user input
-    const days = interaction.options.getInteger('days') || 0;
-    const hours = interaction.options.getInteger('hours') || 0;
-    const minutes = interaction.options.getInteger('minutes') || 0;
-    const prize = interaction.options.getString('prize');
-
-
-    if (!prize) {
-        await interaction.reply('Please provide a valid prize.');
-        return;
-    }
-
-    const now = new Date();
-    const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
-
-    if (endTime <= now) {
-        await interaction.reply('The end time must be in the future.');
-        return;
-    }
-
-    // Calculate the remaining time
-    const remainingTimeMs = endTime - now;
-
-    // Readable format for the end time using Tehran timezone
-    const readableEndTime = endTime.toLocaleString('en-GB', { timeZone: 'Asia/Tehran' });
-
-    // Creating an Embed message to display the giveaway
-    const embed = new EmbedBuilder()
-        .setTitle(`🎉 Giveaway: ${prize}`)
-        .setDescription(`Click the button below to join the giveaway!\nEnds at: **${readableEndTime}** (Tehran Time)`)
-        .setColor(0x00FF00)
-        .setTimestamp(endTime);
-
-    // Button for joining the giveaway
-    const button = new ButtonBuilder()
-        .setCustomId('giveaway-entry')
-        .setLabel('Join the Giveaway')
-        .setStyle(ButtonStyle.Primary);
-
-    // Adding the button to an action row
-    const actionRow = new ActionRowBuilder().addComponents(button);
-
-    // Sending the embed and button as a reply to the interaction
-    const message = await interaction.reply({
-        embeds: [embed],
-        components: [actionRow],
-        ephemeral: false, // Change to true if you want it to be a private message
-    });
-
-    // Collector for capturing button interactions
-    const collector = message.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: remainingTimeMs,
-    });
-
-    const participants = new Set(); // Set to track participants
-
-    // Collecting button clicks
-    collector.on('collect', async (buttonInteraction) => {
-        const user = buttonInteraction.user;
-        if (!participants.has(user.id)) {
-            participants.add(user.id); // Add the user to the participants list
-            await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway!`, ephemeral: true });
-        } else {
-            await buttonInteraction.reply({ content: 'You have already entered this giveaway.', ephemeral: true });
-        }
-    });
-
-    // When the giveaway ends
-    collector.on('end', async () => {
-        if (participants.size === 0) {
-            await interaction.followUp('No one entered the giveaway.'); // Use followUp to avoid creating another embed
+    try {
+        const senderDiscordID = interaction.user.id;
+        if (!isAdmin(senderDiscordID)) {
+            await interaction.editReply({ content: 'You are not Admin!', ephemeral: true });
             return;
         }
 
-        // Randomly select a winner
-        const winnerId = [...participants][Math.floor(Math.random() * participants.size)];
-        const winner = await interaction.guild.members.fetch(winnerId);
+        // Fetching user input
+        const days = interaction.options.getInteger('days') || 0;
+        const hours = interaction.options.getInteger('hours') || 0;
+        const minutes = interaction.options.getInteger('minutes') || 0;
+        const prize = interaction.options.getString('prize');
 
-        // Announce the winner and tag them
-        await interaction.followUp(`🎉 The giveaway has ended! Congratulations ${winner}, you won **${prize}**!`);
-    });
+        if (!prize) {
+            await interaction.reply('Please provide a valid prize.');
+            return;
+        }
+
+        const now = new Date();
+        const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
+
+        if (endTime <= now) {
+            await interaction.reply('The end time must be in the future.');
+            return;
+        }
+
+        // Calculate the remaining time
+        const remainingTimeMs = endTime - now;
+
+        // Readable format for the end time using Tehran timezone
+        const readableEndTime = endTime.toLocaleString('en-GB', { timeZone: 'Asia/Tehran' });
+
+        // Creating an Embed message to display the giveaway
+        const embed = new EmbedBuilder()
+            .setTitle(`🎉 Giveaway: ${prize}`)
+            .setDescription(`Click the button below to join the giveaway!\nEnds at: **${readableEndTime}** (Tehran Time)`)
+            .setColor(0x00FF00)
+            .setTimestamp(endTime);
+
+        // Button for joining the giveaway
+        const button = new ButtonBuilder()
+            .setCustomId('giveaway-entry')
+            .setLabel('Join the Giveaway')
+            .setStyle(ButtonStyle.Primary);
+
+        // Adding the button to an action row
+        const actionRow = new ActionRowBuilder().addComponents(button);
+
+        // Sending the embed and button as a reply to the interaction
+        const message = await interaction.reply({
+            embeds: [embed],
+            components: [actionRow],
+            ephemeral: false,
+        });
+
+        // Collector for capturing button interactions
+        const collector = message.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: remainingTimeMs,
+        });
+
+        const participants = new Set(); // Set to track participants
+
+        // Collecting button clicks
+        collector.on('collect', async (buttonInteraction) => {
+            try {
+                const user = buttonInteraction.user;
+                if (!participants.has(user.id)) {
+                    participants.add(user.id); // Add the user to the participants list
+                    await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway!`, ephemeral: true });
+                } else {
+                    await buttonInteraction.reply({ content: 'You have already entered this giveaway.', ephemeral: true });
+                }
+            } catch (error) {
+                console.error('Error in collecting button interaction:', error);
+                await buttonInteraction.reply({ content: 'Something went wrong while processing your entry. Please try again.', ephemeral: true });
+            }
+        });
+
+        // When the giveaway ends
+        collector.on('end', async () => {
+            try {
+                if (participants.size === 0) {
+                    await interaction.followUp('No one entered the giveaway.');
+                    return;
+                }
+
+                // Randomly select a winner
+                const winnerId = [...participants][Math.floor(Math.random() * participants.size)];
+                const winner = await interaction.guild.members.fetch(winnerId);
+
+                // Announce the winner and tag them
+                await interaction.followUp(`🎉 The giveaway has ended! Congratulations ${winner}, you won **${prize}**!`);
+            } catch (error) {
+                console.error('Error in ending giveaway:', error);
+                await interaction.followUp('Something went wrong when announcing the winner.');
+            }
+        });
+    } catch (error) {
+        console.error('Error in createGiveaway function:', error);
+        await interaction.reply({ content: 'An error occurred while starting the giveaway. Please try again.', ephemeral: true });
+    }
 };
-
-
 
 
 
@@ -297,7 +318,7 @@ const transferBalance = async (interaction) => {
     await interaction.deferReply({ ephemeral: false });
 
     const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID)) {
+    if (!isAdmin(senderDiscordID)) {
         await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
         return;
     }
@@ -428,7 +449,7 @@ const addBalance = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
     const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID)) {
+    if (!isAdmin(senderDiscordID)) {
         await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
         return;
     }
@@ -518,7 +539,7 @@ const removeAdmin = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
     const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID, true)) {
+    if (!isAdmin(senderDiscordID, true)) {
         await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
         return;
     }
@@ -583,7 +604,7 @@ const addAdmin = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
     const senderDiscordID = interaction.user.id;
-    if (isAdmin(senderDiscordID, true)) {
+    if (!isAdmin(senderDiscordID, true)) {
         await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
         return;
     }

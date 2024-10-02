@@ -512,12 +512,6 @@ exports.createTextFile = (data, fileName, targetFolder) => {
 
     let fileContent = '';
 
-    // Function to center text with padding based on the width of the content
-    const centerText = (text, width) => {
-        const padding = Math.floor((width - text.length) / 2);
-        return ' '.repeat(padding) + text + ' '.repeat(padding);
-    };
-
     // Group data by sheet name (merge entries for the same sheet)
     const groupedData = data.reduce((acc, sheetData) => {
         if (!acc[sheetData.sheet]) {
@@ -541,8 +535,8 @@ exports.createTextFile = (data, fileName, targetFolder) => {
         }
     });
 
-    // Center the "WIXANA GUILD" title based on the widest row
-    fileContent += centerText('*** WIXANA GUILD ***', maxWidth).toUpperCase() + '\n\n\n';
+    // Title "WIXANA GUILD" centered
+    fileContent += '*** WIXANA GUILD ***'.toUpperCase().padStart((maxWidth + 21) / 2) + '\n\n\n';
 
     // Iterate over each sheet's data (grouped by sheet name)
     Object.keys(groupedData).forEach(sheetName => {
@@ -556,25 +550,35 @@ exports.createTextFile = (data, fileName, targetFolder) => {
             Math.max(header.length, ...sheetEntries.map(entry => (entry.data[header] || '').length))
         );
 
-        // Calculate total row width for centering the sheet name
-        const totalWidth = columnWidths.reduce((a, b) => a + b, 0) + headers.length * 3;
-
-        // Center the sheet name based on the calculated row width
-        fileContent += centerText(`--- ${sheetName} ---`, totalWidth) + '\n\n';
+        // Left-align the sheet name
+        fileContent += `--- ${sheetName} ---` + '\n\n';
 
         // Define a function to pad the values for alignment
         const padString = (str, length) => str.padEnd(length, ' ');
 
         // Generate the header row with proper spacing
         fileContent += headers.map((header, colIndex) => padString(header, columnWidths[colIndex])).join(' | ') + '\n';
-        fileContent += '-'.repeat(totalWidth) + '\n'; // Header separator line
+        fileContent += '-'.repeat(columnWidths.reduce((a, b) => a + b, 0) + headers.length * 3) + '\n'; // Header separator line
 
-        // Generate the rows with proper spacing
+        // Process each sheet entry (row)
         sheetEntries.forEach(sheetEntry => {
-            const row = headers.map((header, colIndex) =>
-                padString(sheetEntry.data[header] || '', columnWidths[colIndex])
-            ).join(' | ');
-            fileContent += row + '\n';
+            // Split multi-line values into arrays of lines for each cell
+            const rowLines = headers.map(header => (sheetEntry.data[header] || '').split('\n'));
+
+            // Determine the maximum number of lines across all cells in the row
+            const maxLines = Math.max(...rowLines.map(lines => lines.length));
+
+            // Render each line of the row
+            for (let lineIndex = 0; lineIndex < maxLines; lineIndex++) {
+                const row = headers.map((header, colIndex) => {
+                    // Get the current line for the cell, or an empty string if the lineIndex exceeds the number of lines for that cell
+                    const cellLines = rowLines[colIndex];
+                    const lineContent = cellLines[lineIndex] || '';
+                    return padString(lineContent, columnWidths[colIndex]);
+                }).join(' | ');
+
+                fileContent += row + '\n'; // Append the current line to the file content
+            }
         });
 
         // Add some extra spacing between sheets
@@ -584,5 +588,4 @@ exports.createTextFile = (data, fileName, targetFolder) => {
     // Write the generated content to the file
     fs.writeFileSync(filePath, fileContent);
     return filePath;
-
 };
