@@ -18,6 +18,7 @@ const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentTyp
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment');
+const { isAdmin } = require('../utils/sheet');
 
 
 exports.botInitListeners = async () => {
@@ -80,6 +81,12 @@ const createLottery = async (interaction) => {
     }
 
     await interaction.deferReply({ ephemeral: false });
+
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
 
     const days = interaction.options.getInteger('days');
     const hours = interaction.options.getInteger('hours');
@@ -189,11 +196,20 @@ const createLottery = async (interaction) => {
 
 
 const createGiveaway = async (interaction) => {
+
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
+
+
     // Fetching user input
     const days = interaction.options.getInteger('days') || 0;
     const hours = interaction.options.getInteger('hours') || 0;
     const minutes = interaction.options.getInteger('minutes') || 0;
     const prize = interaction.options.getString('prize');
+
 
     if (!prize) {
         await interaction.reply('Please provide a valid prize.');
@@ -279,6 +295,12 @@ const createGiveaway = async (interaction) => {
 const transferBalance = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
+
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
 
     try {
         const fromDiscordID = interaction.options.getString('from'); // Get the source Discord ID from options
@@ -405,7 +427,11 @@ const transferBalance = async (interaction) => {
 const addBalance = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
-
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
     try {
         const discordID = interaction.options.getString('discordid'); // Get target Discord ID from slash command
         const newValue = interaction.options.getNumber('value'); // Get the new value from options
@@ -491,7 +517,11 @@ const addBalance = async (interaction) => {
 const removeAdmin = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
-
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID, true)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
     try {
         const sheetName = 'BOT Control Center'; // Your sheet name
         const senderDiscordID = interaction.user.id;
@@ -552,7 +582,11 @@ const removeAdmin = async (interaction) => {
 const addAdmin = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply({ ephemeral: false });
-
+    const senderDiscordID = interaction.user.id;
+    if (isAdmin(senderDiscordID, true)) {
+        await interaction.editReply({ content: 'You are not Admin !', ephemeral: true });
+        return;
+    }
     try {
         const sheetName = 'BOT Control Center'; // Your sheet name
         const senderDiscordID = interaction.user.id;
@@ -610,11 +644,6 @@ const addAdmin = async (interaction) => {
         await interaction.editReply('Failed to process the addAdmin command.');
     }
 };
-
-
-
-
-
 
 
 const mycharacters = async (interaction) => {
