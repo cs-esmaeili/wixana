@@ -20,11 +20,8 @@ const path = require('path');
 const moment = require('moment');
 const { isAdmin } = require('../utils/sheet');
 
-
-// Create a cooldowns map
+const GENERAL_RATE_LIMIT_TIME = 6000;
 const cooldowns = new Map();
-
-const GENERAL_RATE_LIMIT_TIME = 20000; // 5000 milliseconds = 5 seconds general cooldown
 
 exports.botInitListeners = async () => {
     global.client.on('interactionCreate', async (interaction) => {
@@ -32,10 +29,8 @@ exports.botInitListeners = async () => {
 
         const { user } = interaction;
 
-        // Get the current timestamp
         const now = Date.now();
 
-        // If this user has used any command recently, check the general cooldown
         if (cooldowns.has(user.id)) {
             const expirationTime = cooldowns.get(user.id) + GENERAL_RATE_LIMIT_TIME;
 
@@ -45,48 +40,31 @@ exports.botInitListeners = async () => {
             }
         }
 
-        // Set the current timestamp as the last used time for this user
-        cooldowns.set(user.id, now);
-
-        // Now, proceed with the command handling
         try {
             const { commandName } = interaction;
 
+            // Command handling logic
             if (commandName === 'addadmin') {
                 await addAdmin(interaction);
-            }
-
-            if (commandName === 'mycharacters') {
+            } else if (commandName === 'mycharacters') {
                 await mycharacters(interaction);
-            }
-
-            if (commandName === 'balance') {
+            } else if (commandName === 'balance') {
                 await balance(interaction);
-            }
-
-            if (commandName === 'attendance') {
+            } else if (commandName === 'attendance') {
                 await textFile(interaction);
-            }
-
-            if (commandName === 'removeadmin') {
+            } else if (commandName === 'removeadmin') {
                 await removeAdmin(interaction);
-            }
-
-            if (commandName === 'addbalance') {
+            } else if (commandName === 'addbalance') {
                 await addBalance(interaction);
-            }
-
-            if (commandName === 'transferbalance') {
+            } else if (commandName === 'transferbalance') {
                 await transferBalance(interaction);
-            }
-
-            if (commandName === 'creategiveaway') {
+            } else if (commandName === 'creategiveaway') {
                 await createGiveaway(interaction);
-            }
-
-            if (commandName === 'createlottery') {
+            } else if (commandName === 'createlottery') {
                 await createLottery(interaction);
             }
+
+            cooldowns.set(user.id, now);
 
         } catch (error) {
             console.error(error);
@@ -94,6 +72,8 @@ exports.botInitListeners = async () => {
         }
     });
 };
+
+
 
 
 const createLottery = async (interaction) => {
@@ -257,7 +237,7 @@ const createLottery = async (interaction) => {
 
                 await message.edit({ embeds: [finalEmbed], components: [] });
 
-                
+
                 const { index, value } = await findCol("Pending Balance", "Bonus", 91);
                 let newValue = (value === "" ? parseInt(fee) : parseInt(removeCommas(value)) + parseInt(fee));
                 await updateSheetValue("Pending Balance", index, newValue);
@@ -318,7 +298,7 @@ const createGiveaway = async (interaction) => {
         // Button for joining the giveaway
         const button = new ButtonBuilder()
             .setCustomId('giveaway-entry')
-            .setLabel('Join the Giveaway')
+            .setLabel('Join the Giveaway 🎟️')
             .setStyle(ButtonStyle.Primary);
 
         // Adding the button to an action row
@@ -328,6 +308,12 @@ const createGiveaway = async (interaction) => {
         const message = await interaction.reply({
             embeds: [embed],
             components: [actionRow],
+            ephemeral: false,
+        });
+
+        // Send the giveaway start message tagging @everyone
+        await interaction.followUp({
+            content: '@everyone 🎉 The giveaway has started! Click the button to enter!',
             ephemeral: false,
         });
 
@@ -345,7 +331,7 @@ const createGiveaway = async (interaction) => {
                 const user = buttonInteraction.user;
                 if (!participants.has(user.id)) {
                     participants.add(user.id); // Add the user to the participants list
-                    await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway!`, ephemeral: true });
+                    await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway! 🎉`, ephemeral: true });
                 } else {
                     await buttonInteraction.reply({ content: 'You have already entered this giveaway.', ephemeral: true });
                 }
@@ -367,8 +353,9 @@ const createGiveaway = async (interaction) => {
                 const winnerId = [...participants][Math.floor(Math.random() * participants.size)];
                 const winner = await interaction.guild.members.fetch(winnerId);
 
-                // Announce the winner and tag them
-                await interaction.followUp(`🎉 The giveaway has ended! Congratulations ${winner}, you won **${prize}**!`);
+                // Announce the winner and tag @everyone and the winner
+                await interaction.followUp(`@everyone 🎉 The giveaway has ended! Congratulations <@${winnerId}>, you won **${prize}**! 🏆`);
+
             } catch (error) {
                 console.error('Error in ending giveaway:', error);
                 await interaction.followUp('Something went wrong when announcing the winner.');
@@ -379,6 +366,7 @@ const createGiveaway = async (interaction) => {
         await interaction.reply({ content: 'An error occurred while starting the giveaway. Please try again.', ephemeral: true });
     }
 };
+
 
 
 
@@ -739,7 +727,8 @@ const addAdmin = async (interaction) => {
 const mycharacters = async (interaction) => {
     // Acknowledge the interaction to prevent timeout
     await interaction.deferReply();
-
+    const heroNames = await findHeroNames(interaction.user.id);
+    if (heroNames.length == 0) { interaction.editReply("You dont have Heros !"); return; }
     try {
         const discordID = interaction.user.id; // Get Discord ID from interaction
 
@@ -780,7 +769,8 @@ const balance = async (interaction) => {
     await interaction.deferReply({ ephemeral: false }); // Makes the initial reply visible only to the user
 
     try {
-        const discordID = interaction.user.id; // Get Discord ID from interaction
+        const heroNames = await findHeroNames(interaction.user.id);
+        if (heroNames.length == 0) { interaction.editReply("You dont have Heros !"); return; }
 
         // Calculate balances
         const activeBalance = addCommas(await calculateActiveBlance(discordID) + "");
