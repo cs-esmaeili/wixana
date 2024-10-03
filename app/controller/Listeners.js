@@ -21,55 +21,80 @@ const moment = require('moment');
 const { isAdmin } = require('../utils/sheet');
 
 
+// Create a cooldowns map
+const cooldowns = new Map();
+
+const GENERAL_RATE_LIMIT_TIME = 20000; // 5000 milliseconds = 5 seconds general cooldown
+
 exports.botInitListeners = async () => {
     global.client.on('interactionCreate', async (interaction) => {
         if (!interaction.isCommand()) return;
 
-        const { commandName } = interaction;
+        const { user } = interaction;
 
-        // Handle addadmin command
-        if (commandName === 'addadmin') {
-            await addAdmin(interaction);
+        // Get the current timestamp
+        const now = Date.now();
+
+        // If this user has used any command recently, check the general cooldown
+        if (cooldowns.has(user.id)) {
+            const expirationTime = cooldowns.get(user.id) + GENERAL_RATE_LIMIT_TIME;
+
+            if (now < expirationTime) {
+                const timeLeft = (expirationTime - now) / 1000;
+                return interaction.reply(`Please wait ${timeLeft.toFixed(1)} more seconds before using another command.`);
+            }
         }
 
-        // // Handle mycharacters command
-        if (commandName === 'mycharacters') {
-            await mycharacters(interaction);
-        }
+        // Set the current timestamp as the last used time for this user
+        cooldowns.set(user.id, now);
 
-        // // Handle balance command
-        if (commandName === 'balance') {
-            await balance(interaction);
-        }
+        // Now, proceed with the command handling
+        try {
+            const { commandName } = interaction;
 
-        // // Handle attendance command
-        if (commandName === 'attendance') {
-            await textFile(interaction);
-        }
+            if (commandName === 'addadmin') {
+                await addAdmin(interaction);
+            }
 
-        if (commandName === 'removeadmin') {
-            await removeAdmin(interaction);
-        }
+            if (commandName === 'mycharacters') {
+                await mycharacters(interaction);
+            }
 
-        if (commandName === 'addbalance') {
-            await addBalance(interaction);
-        }
+            if (commandName === 'balance') {
+                await balance(interaction);
+            }
 
-        if (commandName === 'transferbalance') {
-            await transferBalance(interaction);
-        }
+            if (commandName === 'attendance') {
+                await textFile(interaction);
+            }
 
-        if (commandName === 'creategiveaway') {
-            await createGiveaway(interaction);
-        }
+            if (commandName === 'removeadmin') {
+                await removeAdmin(interaction);
+            }
 
-        if (commandName === 'createlottery') {
-            await createLottery(interaction);
-        }
+            if (commandName === 'addbalance') {
+                await addBalance(interaction);
+            }
 
+            if (commandName === 'transferbalance') {
+                await transferBalance(interaction);
+            }
+
+            if (commandName === 'creategiveaway') {
+                await createGiveaway(interaction);
+            }
+
+            if (commandName === 'createlottery') {
+                await createLottery(interaction);
+            }
+
+        } catch (error) {
+            console.error(error);
+            interaction.reply('There was an error executing this command!');
+        }
     });
-
 };
+
 
 const createLottery = async (interaction) => {
     try {
