@@ -158,9 +158,9 @@ const createLottery = async (interaction) => {
                     const reward3rd = totalPrizePool * 0.10;
 
                     try {
-                        const userHeros = await findHeroNames(user.id);
-                        if (userHeros.length === 0) {
-                            await buttonInteraction.editReply("You don't have any hero!");
+                        const heroNames = await findHeroNames(user.id);
+                        if (heroNames.length === 0) {
+                            await buttonInteraction.editReply({ content: "You don't have Heroes!", ephemeral: true });
                             return;
                         }
 
@@ -210,7 +210,6 @@ const createLottery = async (interaction) => {
 
                 const remainingPrizePool = totalPrizePool * 0.95;
                 const fee = totalPrizePool * 5 / 100;
-                console.log(fee);
 
                 let reward1st = remainingPrizePool * 0.50;
                 let reward2nd = remainingPrizePool * 0.35;
@@ -330,6 +329,14 @@ const createGiveaway = async (interaction) => {
             try {
                 const user = buttonInteraction.user;
                 if (!participants.has(user.id)) {
+
+                    const heroNames = await findHeroNames(user.id);
+                    if (heroNames.length === 0) {
+                        await buttonInteraction.reply({ content: "You don't have Heroes!", ephemeral: true });
+                        return;
+                    }
+
+
                     participants.add(user.id); // Add the user to the participants list
                     await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway! 🎉`, ephemeral: true });
                 } else {
@@ -769,7 +776,8 @@ const balance = async (interaction) => {
     await interaction.deferReply({ ephemeral: false }); // Makes the initial reply visible only to the user
 
     try {
-        const heroNames = await findHeroNames(interaction.user.id);
+        const discordID = interaction.user.id;
+        const heroNames = await findHeroNames(discordID);
         if (heroNames.length == 0) { interaction.editReply("You dont have Heros !"); return; }
 
         // Calculate balances
