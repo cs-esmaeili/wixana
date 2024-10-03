@@ -1,13 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const spreadsheetId = process.env.SHEETID;
+const { normalizeHeroName } = require('./general')
 
 exports.getSheetData = async (sheetName) => {
 
     const sheet = global.sheet;
     const auth = global.googleAuth;
 
-    const range = `${sheetName}!A:Z`; 
+    const range = `${sheetName}!A:Z`;
     const response = await sheet.spreadsheets.values.get({
         auth,
         spreadsheetId,
@@ -142,7 +143,8 @@ exports.findHeroNames = async (discordID) => {
                 const heroNames = [];
                 for (let i = 1; i <= 8; i++) {
                     if (rows[rowIndex - i]) {
-                        heroNames.push(rows[rowIndex - i][colIndex]);
+                        const heroname = rows[rowIndex - i][colIndex];
+                        heroNames.push(normalizeHeroName(heroname));
                     }
                 }
                 foundHeroes = heroNames;
@@ -174,7 +176,7 @@ exports.isAdmin = async (discordID, mainAdmin = false) => {
         // Check if the user is in the admin list or main admin list
         const isAdmin = sheetData.some(row => row[adminListIndex]?.trim() === discordID);
         const isMainAdmin = sheetData.some(row => row[mainAdminListIndex]?.trim() === discordID);
-        
+
         if (mainAdmin) {
             // If mainAdmin flag is true, return true only if the user is a main admin
             return isMainAdmin;
