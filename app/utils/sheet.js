@@ -55,33 +55,6 @@ exports.findCellIndex = async (sheetName, searchColumnName, searchValues) => {
 };
 
 
-
-exports.updateSheetValue = async (sheetName, range, value) => {
-    try {
-        const sheet = global.sheet;
-        const auth = global.googleAuth;
-
-        const fullRange = `${sheetName}!${range}`; // Combine sheet name with the range
-
-        const request = {
-            spreadsheetId,
-            range: fullRange,
-            valueInputOption: 'USER_ENTERED',
-            resource: {
-                values: [[value]], // Wrap value in array to match Sheets format
-            },
-            auth
-        };
-
-        const response = await sheet.spreadsheets.values.update(request);
-
-    } catch (error) {
-        console.error(`Error in updateSheetValue: ${error}`);
-        throw error;
-    }
-};
-
-
 exports.clearSheetCell = async (sheetName, cellRange) => {
 
     const sheet = global.sheet;

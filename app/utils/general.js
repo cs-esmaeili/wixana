@@ -25,10 +25,27 @@ exports.separateCellLocation = (cell) => {
     // Use a regular expression to match the column letters and row numbers
     const match = cell.match(/^([A-Z]+)(\d+)$/);
     if (match) {
-        const column = match[1]; // Extract the column letters (e.g., "C")
+        const col = match[1]; // Extract the column letters (e.g., "C")
         const row = match[2]; // Extract the row number (e.g., "10")
-        return { column, row: parseInt(row, 10) }; // Return as an object
+        return { col, row: parseInt(row, 10) }; // Return as an object
     } else {
         throw new Error("Invalid cell location format");
     }
+}
+
+let cooldown = null;
+exports.checkCooldown = () => {
+    if (cooldown != null) {
+        const now = Date.now();
+
+        // Check if the current time is less than the cooldown time plus 15000 milliseconds
+        if (now < cooldown + 6000) {
+            const timeLeft = (cooldown + 6000 - now) / 1000; // Calculate remaining time in seconds
+            return { block: true, time: timeLeft.toFixed(1) }
+        }
+    }
+
+    // Set the new cooldown time to the current time
+    cooldown = Date.now();
+    return { block: false, time: 0 }
 }
