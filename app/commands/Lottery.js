@@ -96,19 +96,42 @@ const onClick = async (buttonInteraction, context) => {
     try {
         await buttonInteraction.deferReply({ ephemeral: true });
         const { participants, totalTicketsBought, totalPrizePool, ticketPrice, allowNumberTickets, embed, message, readableEndTime } = context;
-
+        const user = buttonInteraction.user;
+        
         const check = await checkCooldown();
         if (check.block) {
             return buttonInteraction.editReply(`Please wait ${check.time} more seconds before using another command.`);
         }
 
-        const user = buttonInteraction.user;
+        const heroNames = await findHeroNames(user.id);
+        if (heroNames.length === 0) {
+            await buttonInteraction.editReply({ content: "You don't have Heroes!", ephemeral: true });
+            return;
+        }
+
+
         const currentCount = participants.get(user.id) || 0;
 
-        if (currentCount > allowNumberTickets) {
+        // Check if the user already bought the maximum allowed number of tickets
+        if (currentCount >= allowNumberTickets) {
             await buttonInteraction.editReply({ content: 'You have reached the maximum number of tickets you can buy.' });
             return;
         }
+
+        // Prevent spamming by adding a simple cooldown
+        if (context.cooldowns && context.cooldowns[user.id]) {
+            const remainingTime = context.cooldowns[user.id] - Date.now();
+            if (remainingTime > 0) {
+                await buttonInteraction.editReply({ content: `Please wait ${Math.ceil(remainingTime / 1000)} more seconds before buying another ticket.` });
+                return;
+            }
+        }
+
+        // Set cooldown (e.g., 3 seconds to prevent spamming)
+        context.cooldowns = context.cooldowns || {};
+        context.cooldowns[user.id] = Date.now() + 3000;
+
+        // Update participants and ticket counts
         participants.set(user.id, currentCount + 1);
         context.totalTicketsBought++;
         context.totalPrizePool = context.totalTicketsBought * ticketPrice;
@@ -117,30 +140,24 @@ const onClick = async (buttonInteraction, context) => {
         const reward2nd = context.totalPrizePool * 0.35;
         const reward3rd = context.totalPrizePool * 0.10;
 
-        const heroNames = await findHeroNames(user.id);
-        if (heroNames.length === 0) {
-            await buttonInteraction.editReply({ content: "You don't have Heroes!", ephemeral: true });
-            return;
-        }
-
+     
         // Update deducts and notes in the sheet
         const row = await findCell("Pending Balance", "Main Roster", heroNames);
         if (row == null) {
-            await buttonInteraction.editReply({ content: "You don't have Hero in Pending Balance !", ephemeral: true });
+            await buttonInteraction.editReply({ content: "You don't have Hero in Pending Balance!", ephemeral: true });
             return;
         }
         const col = await findCol("Pending Balance", "Deducts", separateCellLocation(row.index).row);
         if (col == null) {
-            await buttonInteraction.editReply({ content: "Deducts col not Found !", ephemeral: true });
+            await buttonInteraction.editReply({ content: "Deducts column not Found!", ephemeral: true });
             return;
         }
         let newDeductsValue = (!col.value ? parseInt(ticketPrice) : parseInt(removeCommas(col.value)) + parseInt(ticketPrice));
         await updateSheetValue("Pending Balance", col.index, newDeductsValue);
 
-
         const colNotes = await findCol("Pending Balance", "Notes", separateCellLocation(row.index).row);
         if (colNotes == null) {
-            await buttonInteraction.editReply({ content: "Notes col not Found !", ephemeral: true });
+            await buttonInteraction.editReply({ content: "Notes column not Found!", ephemeral: true });
             return;
         }
         let newNotesValue = colNotes.value + (colNotes.value.length !== 0 ? "\n" : "") + `Balance decrease: ${ticketPrice} for Lottery`;
@@ -160,6 +177,7 @@ const onClick = async (buttonInteraction, context) => {
         await buttonInteraction.editReply({ content: 'An error occurred during the ticket purchase. Please try again later.' });
     }
 }
+
 
 const onEnd = async (interaction, context) => {
     try {
