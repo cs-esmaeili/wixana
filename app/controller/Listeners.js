@@ -14,6 +14,7 @@ const { updateSheetValue } = require('@root/app/utils/basics.js');
 const { addCommas, checkCooldown } = require('@root/app/utils/general');
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const { createLottery } = require("@root/app/commands/Lottery.js");
+const { createGiveaway } = require("@root/app/commands/giveway.js");
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment');
@@ -52,7 +53,7 @@ exports.botInitListeners = async () => {
             } else if (commandName === 'creategiveaway') {
                 await createGiveaway(interaction);
             } else if (commandName === 'createlottery') {
-                await createLottery(interaction);
+                await createGiveaway(interaction);
             }
 
 
@@ -62,135 +63,6 @@ exports.botInitListeners = async () => {
         }
     });
 };
-
-
-
-
-
-
-
-
-const createGiveaway = async (interaction) => {
-    try {
-        const senderDiscordID = interaction.user.id;
-        if (!isAdmin(senderDiscordID)) {
-            await interaction.editReply({ content: 'You are not Admin!', ephemeral: true });
-            return;
-        }
-
-        // Fetching user input
-        const days = interaction.options.getInteger('days') || 0;
-        const hours = interaction.options.getInteger('hours') || 0;
-        const minutes = interaction.options.getInteger('minutes') || 0;
-        const prize = interaction.options.getString('prize');
-
-        if (!prize) {
-            await interaction.reply('Please provide a valid prize.');
-            return;
-        }
-
-        const now = new Date();
-        const endTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000);
-
-        if (endTime <= now) {
-            await interaction.reply('The end time must be in the future.');
-            return;
-        }
-
-        // Calculate the remaining time
-        const remainingTimeMs = endTime - now;
-
-        // Readable format for the end time using Tehran timezone
-        const readableEndTime = endTime.toLocaleString('en-GB', { timeZone: 'Asia/Tehran' });
-
-        // Creating an Embed message to display the giveaway
-        const embed = new EmbedBuilder()
-            .setTitle(`🎉 Giveaway: ${prize}`)
-            .setDescription(`Click the button below to join the giveaway!\nEnds at: **${readableEndTime}** (Tehran Time)`)
-            .setColor(0x00FF00)
-            .setTimestamp(endTime);
-
-        // Button for joining the giveaway
-        const button = new ButtonBuilder()
-            .setCustomId('giveaway-entry')
-            .setLabel('Join the Giveaway 🎟️')
-            .setStyle(ButtonStyle.Primary);
-
-        // Adding the button to an action row
-        const actionRow = new ActionRowBuilder().addComponents(button);
-
-        // Sending the embed and button as a reply to the interaction
-        const message = await interaction.reply({
-            embeds: [embed],
-            components: [actionRow],
-            ephemeral: false,
-        });
-
-        // Send the giveaway start message tagging @everyone
-        await interaction.followUp({
-            content: '@everyone 🎉 The giveaway has started! Click the button to enter!',
-            ephemeral: false,
-        });
-
-        // Collector for capturing button interactions
-        const collector = message.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            time: remainingTimeMs,
-        });
-
-        const participants = new Set(); // Set to track participants
-
-        // Collecting button clicks
-        collector.on('collect', async (buttonInteraction) => {
-            try {
-                const user = buttonInteraction.user;
-                if (!participants.has(user.id)) {
-
-                    const heroNames = await findHeroNames(user.id);
-                    if (heroNames.length === 0) {
-                        await buttonInteraction.reply({ content: "You don't have Heroes!", ephemeral: true });
-                        return;
-                    }
-
-
-                    participants.add(user.id); // Add the user to the participants list
-                    await buttonInteraction.reply({ content: `${user.username}, you have successfully entered the giveaway! 🎉`, ephemeral: true });
-                } else {
-                    await buttonInteraction.reply({ content: 'You have already entered this giveaway.', ephemeral: true });
-                }
-            } catch (error) {
-                console.error('Error in collecting button interaction:', error);
-                await buttonInteraction.reply({ content: 'Something went wrong while processing your entry. Please try again.', ephemeral: true });
-            }
-        });
-
-        // When the giveaway ends
-        collector.on('end', async () => {
-            try {
-                if (participants.size === 0) {
-                    await interaction.followUp('No one entered the giveaway.');
-                    return;
-                }
-
-                // Randomly select a winner
-                const winnerId = [...participants][Math.floor(Math.random() * participants.size)];
-                const winner = await interaction.guild.members.fetch(winnerId);
-
-                // Announce the winner and tag @everyone and the winner
-                await interaction.followUp(`@everyone 🎉 The giveaway has ended! Congratulations <@${winnerId}>, you won **${prize}**! 🏆`);
-
-            } catch (error) {
-                console.error('Error in ending giveaway:', error);
-                await interaction.followUp('Something went wrong when announcing the winner.');
-            }
-        });
-    } catch (error) {
-        console.error('Error in createGiveaway function:', error);
-        await interaction.reply({ content: 'An error occurred while starting the giveaway. Please try again.', ephemeral: true });
-    }
-};
-
-
 
 
 const transferBalance = async (interaction) => {
