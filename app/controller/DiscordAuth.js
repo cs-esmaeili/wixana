@@ -34,6 +34,24 @@ exports.discordLogIn = async () => {
 const registerCommands = async (client) => {
     const commands = [
         {
+            name: "deathroll",
+            description: "Challenge someone to a Deathroll game.",
+            options: [
+                {
+                    type: 6,
+                    name: "target",
+                    description: "The player you want to challenge to a Deathroll.",
+                    required: true
+                },
+                {
+                    name: 'price',
+                    description: 'Price',
+                    type: 10,
+                    required: true,
+                },
+            ]
+        },
+        {
             name: 'addadmin',
             description: 'Add an admin with a Discord ID',
             options: [
@@ -187,6 +205,7 @@ const registerCommands = async (client) => {
             name: 'attendance',
             description: 'Get attendance in a file',
         },
+
     ];
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 

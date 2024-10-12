@@ -15,6 +15,7 @@ const { addCommas, checkCooldown } = require('@root/app/utils/general');
 const { EmbedBuilder} = require('discord.js');
 const { createLottery } = require("@root/app/commands/Lottery.js");
 const { createGiveaway } = require("@root/app/commands/giveway.js");
+const { createDeathroll } = require("@root/app/commands/deathroll.js");
 const { roll } = require("@root/app/commands/roll.js");
 const fs = require('fs');
 const path = require('path');
@@ -57,6 +58,10 @@ exports.botInitListeners = async () => {
                 await createLottery(interaction);
             } else if (commandName === 'roll') {
                 await roll(interaction);
+            } else if (commandName === 'deathroll') {
+                console.log("s");
+                
+                await createDeathroll(interaction);
             }
 
 
