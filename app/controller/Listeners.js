@@ -12,9 +12,10 @@ const {
 } = require('@root/app/utils/sheet.js');
 const { updateSheetValue } = require('@root/app/utils/basics.js');
 const { addCommas, checkCooldown } = require('@root/app/utils/general');
-const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { EmbedBuilder} = require('discord.js');
 const { createLottery } = require("@root/app/commands/Lottery.js");
 const { createGiveaway } = require("@root/app/commands/giveway.js");
+const { roll } = require("@root/app/commands/roll.js");
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment');
@@ -53,7 +54,9 @@ exports.botInitListeners = async () => {
             } else if (commandName === 'creategiveaway') {
                 await createGiveaway(interaction);
             } else if (commandName === 'createlottery') {
-                await createGiveaway(interaction);
+                await createLottery(interaction);
+            } else if (commandName === 'roll') {
+                await roll(interaction);
             }
 
 

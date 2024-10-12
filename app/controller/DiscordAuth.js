@@ -46,6 +46,10 @@ const registerCommands = async (client) => {
             ],
         },
         {
+            name: 'roll',
+            description: 'Random number ',
+        },
+        {
             name: 'removeadmin',
             description: 'Remove an admin with a Discord ID',
             options: [
