@@ -4,7 +4,6 @@ const { findCol, findCell, findCellByValue, updateSheetValue, findCellByIndex } 
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const { isAdmin, getSheetData } = require('../utils/sheet');
 
-
 exports.createLottery = async (interaction) => {
     try {
         if (!interaction.guild) {
@@ -63,6 +62,10 @@ exports.createLottery = async (interaction) => {
             components: [actionRow],
             ephemeral: false,
         });
+        await interaction.followUp({
+            content: '@everyone 🎉 The lottery has started!',
+            ephemeral: false,
+        });
 
         const context = {
             participants,
@@ -75,29 +78,54 @@ exports.createLottery = async (interaction) => {
             embed,
             message,
             lotteryStatus,
+            endTime, // Added endTime to context
+            cooldowns: {},
         };
 
-        const collector = message.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            time: endTime - now,
-        });
+        const collector = createCollector(message, context, interaction);
 
-        await interaction.followUp(`🎉 @everyone The lottery **${description}** has started!`); // Notifies users
+        // Refresh embed and collector every 14 minutes
+        const refreshInterval = setInterval(async () => {
+            if (context.lotteryStatus === 'closed') {
+                clearInterval(refreshInterval);
+                return;
+            }
 
-        collector.on('collect', (buttonInteraction) => onClick(buttonInteraction, context));
-        collector.on('end', () => onEnd(interaction, context));
+            // Refresh the embed
+            const updatedEmbed = EmbedBuilder.from(context.embed)
+                .setDescription(
+                    `🎟️ **Ticket Price:** ${ticketPrice}\n🕰️ **Ends at:** ${readableEndTime} (Tehran Time)\n🛒 **Max Tickets per User:** ${allowNumberTickets}\n\n🟢 **Status:** ${context.lotteryStatus}\n🎫 **Total Tickets Bought:** ${context.totalTicketsBought}`
+                );
+
+            await message.edit({ embeds: [updatedEmbed], components: [actionRow] });
+
+        }, 14 * 60 * 1000); // Refresh every 14 minutes (less than 15 minutes)
+
     } catch (error) {
         console.error('Error creating lottery:', error);
         await interaction.editReply({ content: 'An error occurred while creating the lottery. Please try again.', ephemeral: true });
     }
 };
 
+const createCollector = (message, context, interaction) => {
+    const collector = message.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: context.endTime - Date.now(), // Set the remaining time for the collector
+    });
+
+    collector.on('collect', (buttonInteraction) => onClick(buttonInteraction, context));
+    collector.on('end', () => onEnd(interaction, context));
+
+    return collector;
+}
+
+
 const onClick = async (buttonInteraction, context) => {
     try {
         await buttonInteraction.deferReply({ ephemeral: true });
         const { participants, totalTicketsBought, totalPrizePool, ticketPrice, allowNumberTickets, embed, message, readableEndTime } = context;
         const user = buttonInteraction.user;
-        
+
         const check = await checkCooldown();
         if (check.block) {
             return buttonInteraction.editReply(`Please wait ${check.time} more seconds before using another command.`);
@@ -108,7 +136,6 @@ const onClick = async (buttonInteraction, context) => {
             await buttonInteraction.editReply({ content: "You don't have Heroes!", ephemeral: true });
             return;
         }
-
 
         const currentCount = participants.get(user.id) || 0;
 
@@ -140,7 +167,6 @@ const onClick = async (buttonInteraction, context) => {
         const reward2nd = context.totalPrizePool * 0.35;
         const reward3rd = context.totalPrizePool * 0.10;
 
-     
         // Update deducts and notes in the sheet
         const row = await findCell("Pending Balance", "Main Roster", heroNames);
         if (row == null) {
@@ -192,14 +218,12 @@ const onEnd = async (interaction, context) => {
         const winners = [...participants.keys()].sort(() => Math.random() - 0.5).slice(0, 3);
         const winnerTags = await Promise.all(winners.map(id => interaction.guild.members.fetch(id)));
 
-
         const remainingPrizePool = totalPrizePool * 0.95;
         const fee = totalPrizePool * 0.05;
 
         let reward1st = remainingPrizePool * 0.50;
         let reward2nd = remainingPrizePool * 0.35;
         let reward3rd = remainingPrizePool * 0.10;
-
 
         if (winners.length < 3) {
             if (winners.length === 2) {
@@ -217,9 +241,11 @@ const onEnd = async (interaction, context) => {
             { winner: winners[2], reward: reward3rd },
         ].filter(entry => entry.winner);
 
-        // Notify everyone and tag the
+        const channel = interaction.channel || message.channel;
+
+        // Notify everyone and tag the winners
         const endNotification = `🏆 @everyone The lottery has ended!\n\n🎉 **Winners:**\n🏅 1st Place: ${winnerTags[0]?.toString() || 'N/A'}\n🥈 2nd Place: ${winnerTags[1]?.toString() || 'N/A'}\n🥉 3rd Place: ${winnerTags[2]?.toString() || 'N/A'}\n **Thank you for participating in the lottery, the next lotteries will be posted on this channel soon**`;
-        await interaction.followUp(endNotification);
+        await channel.send(endNotification);
 
         const finalEmbed = EmbedBuilder.from(embed)
             .setDescription(
@@ -228,16 +254,20 @@ const onEnd = async (interaction, context) => {
 
         await message.edit({ embeds: [finalEmbed], components: [] }); // Disable the button
 
-
         const cellLottary = await findCellByValue("Pending Balance", "Lottary"); // I90
-        if (!cellLottary) { return console.log("Lottary cell not found !"); }
+        if (!cellLottary) {
+            console.log("Lottary cell not found !");
+            return;
+        }
         const sheetFee = await findCellByIndex("Pending Balance", separateCellLocation(cellLottary.index).col + (separateCellLocation(cellLottary.index).row + 1));
-        if (!sheetFee) { return console.log("sheetFee cell not found !"); }
+        if (!sheetFee) {
+            console.log("sheetFee cell not found !");
+            return;
+        }
         let newValue = (!sheetFee.value ? parseInt(fee) : parseInt(removeCommas(sheetFee.value)) + parseInt(fee));
         await updateSheetValue("Pending Balance", sheetFee.index, newValue);
 
         rewardDistribution.forEach(async ({ winner, reward }) => {
-
             const heroNames = await findHeroNames(winner);
             if (heroNames.length === 0) {
                 console.log(winner);
@@ -249,10 +279,11 @@ const onEnd = async (interaction, context) => {
                 console.log("You don't have Hero in Pending Balance !");
                 return;
             }
-            // update Bouns 
+
+            // update Bonus 
             const col = await findCol("Pending Balance", "Bonus", separateCellLocation(row.index).row);
             if (col == null) {
-                await buttonInteraction.editReply({ content: "Bonus col not Found !", ephemeral: true });
+                console.log("Bonus column not Found !");
                 return;
             }
             let newBonusValue = (!col.value ? parseInt(reward) : parseInt(removeCommas(col.value)) + parseInt(reward));
@@ -261,15 +292,12 @@ const onEnd = async (interaction, context) => {
             // update notes
             const colNotes = await findCol("Pending Balance", "Notes", separateCellLocation(row.index).row);
             if (colNotes == null) {
-                await buttonInteraction.editReply({ content: "Notes col not Found !", ephemeral: true });
+                console.log("Notes column not Found !");
                 return;
             }
-            let newNotesValue = colNotes.value + (colNotes.value.length !== 0 ? "\n" : "") + `Balance increase: ${reward} Win in Lottery`;
+            let newNotesValue = colNotes.value + (colNotes.value.length !== 0 ? "\n" : "") + `Balance increase: ${parseInt(reward)} Win in Lottery`;
             await updateSheetValue("Pending Balance", colNotes.index, newNotesValue);
         });
-
-
-
     } catch (error) {
         console.error('Error ending lottery:', error);
     }
