@@ -1,6 +1,6 @@
 # Logs
 logs
-*.zip
+
 *.rar
 *.log
 npm-debug.log*
